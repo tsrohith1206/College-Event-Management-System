@@ -383,3 +383,110 @@ service cloud.firestore {
     }
   }
 }
+import { auth, db } from "./firebase.js";
+import { addDoc, collection, getDocs, query, where } 
+from "https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore.js";
+
+auth.onAuthStateChanged(user=>{
+  if(!user) location.href="index.html";
+});
+
+window.createEvent = async ()=>{
+  const title = eName.value;
+  const date = eDate.value;
+  const venue = eVenue.value;
+
+  await addDoc(collection(db,"events"),{
+    title,
+    date,
+    venue,
+    organizer: auth.currentUser.email,
+    status: "pending"
+  });
+
+  alert("Event submitted for approval");
+  loadMyEvents();
+};
+
+async function loadMyEvents(){
+  const q = query(
+    collection(db,"events"),
+    where("organizer","==",auth.currentUser.email)
+  );
+  const snap = await getDocs(q);
+  myEvents.innerHTML="";
+  snap.forEach(doc=>{
+    myEvents.innerHTML += `
+      <div class="card">
+        ${doc.data().title} - ${doc.data().status}
+      </div>`;
+  });
+}
+import { auth, db } from "./firebase.js";
+import { collection, getDocs, updateDoc, doc } 
+from "https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore.js";
+
+auth.onAuthStateChanged(async user=>{
+  if(!user) location.href="index.html";
+  loadEvents();
+});
+
+async function loadEvents(){
+  const snap = await getDocs(collection(db,"events"));
+  adminEvents.innerHTML="";
+  snap.forEach(d=>{
+    const e = d.data();
+    adminEvents.innerHTML += `
+      <div class="card">
+        <b>${e.title}</b> (${e.status})
+        <button onclick="approve('${d.id}')">Approve</button>
+        <button onclick="reject('${d.id}')">Reject</button>
+      </div>`;
+  });
+}
+
+window.approve = async id=>{
+  await updateDoc(doc(db,"events",id),{status:"approved"});
+  loadEvents();
+};
+
+window.reject = async id=>{
+  await updateDoc(doc(db,"events",id),{status:"rejected"});
+  loadEvents();
+};
+// admin.js
+import { setDoc, doc } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore.js";
+
+window.createOrganizer = async ()=>{
+  const email = orgEmail.value;
+  const uid = crypto.randomUUID();
+
+  await setDoc(doc(db,"users",uid),{
+    email,
+    role:"organizer"
+  });
+
+  alert("Organizer created");
+};
+import { query, where } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore.js";
+
+window.register = async (eventId)=>{
+  const q = query(
+    collection(db,"registrations"),
+    where("eventId","==",eventId),
+    where("student","==",auth.currentUser.email)
+  );
+
+  const snap = await getDocs(q);
+  if(!snap.empty){
+    alert("Already registered");
+    return;
+  }
+
+  await addDoc(collection(db,"registrations"),{
+    eventId,
+    student: auth.currentUser.email
+  });
+
+  alert("Registration successful");
+};
